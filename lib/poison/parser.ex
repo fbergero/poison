@@ -93,7 +93,26 @@ defmodule Poison.Parser do
         {rest, pos} = skip_whitespace(rest, pos + 1)
         object_pairs(rest, pos, keys, acc)
       {"}" <> rest, pos} ->
-        {:maps.from_list(acc), pos + 1, rest}
+        case List.keymember?(acc, "__poison__type", 0) do
+          false -> {:maps.from_list(acc), pos + 1, rest}
+          true ->
+            case elem(List.keyfind(acc, "__poison__type", 0),1) do
+              "atom" ->
+                atom =
+                  acc
+                  |> List.keyfind("name", 0)
+                  |> elem(1)
+                  |> String.to_existing_atom()
+                {atom, pos + 1, rest}
+              "tuple" ->
+                tuple =
+                  acc
+                  |> List.keyfind("values", 0)
+                  |> elem(1)
+                  |> List.to_tuple()
+                {tuple, pos + 1, rest}
+            end
+        end
       {other, pos} ->
         syntax_error(other, pos)
     end

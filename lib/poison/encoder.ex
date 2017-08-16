@@ -80,6 +80,8 @@ defprotocol Poison.Encoder do
 
   @typep escape :: :unicode | :javascript | :html_safe
   @typep pretty :: boolean
+  @typep encode_atoms :: boolean
+  @typep encode_tuples :: boolean
   @typep indent :: non_neg_integer
   @typep offset :: non_neg_integer
   @typep strict_keys :: boolean
@@ -90,6 +92,8 @@ defprotocol Poison.Encoder do
     optional(:indent) => indent,
     optional(:offset) => offset,
     optional(:strict_keys) => strict_keys,
+    optional(:encode_atoms) => encode_atoms,
+    optional(:encode_tuples) => encode_tuples
   }
 
   @spec encode(t, options) :: iodata
@@ -104,7 +108,35 @@ defimpl Poison.Encoder, for: Atom do
   def encode(false, _), do: "false"
 
   def encode(atom, options) do
-    Encoder.BitString.encode(Atom.to_string(atom), options)
+    insert_atom =
+      fn x ->
+        Map.put(%{__poison__type: "atom"}, :name, x)
+      end
+    case Map.get(options, :encode_atoms, false) do
+      true ->
+        atom
+        |> Atom.to_string()
+        |> insert_atom.()
+        |> Encoder.encode(options)
+      false ->
+        atom
+        |> Atom.to_string()
+        |> Encoder.BitString.encode(options)
+    end
+
+  end
+end
+
+defimpl Poison.Encoder, for: Tuple do
+  alias Poison.{Encoder, EncodeError}
+
+  def encode(tuple, options) do
+    unless Map.get(options, :encode_tuples, false),
+      do: raise EncodeError, value: tuple
+
+    %{__poison__type: "tuple"}
+    |> Map.put(:values, Tuple.to_list(tuple))
+    |> Encoder.encode(options)
   end
 end
 
